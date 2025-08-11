@@ -2,12 +2,15 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class Main {
   public static void main(String[] args) {
+
+
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     System.out.println("Logs from your program will appear here!");
 
@@ -40,6 +43,7 @@ class SocketHandler implements Runnable{
 
   private final ServerSocket serverSocket;
   private  final Socket clientSocket;
+  private static ConcurrentHashMap<String, String> map = new ConcurrentHashMap<>();
 
   public SocketHandler(ServerSocket serverSocket, Socket clientSocket) throws IOException {
     System.out.println("Called new Socket Thread");
@@ -60,7 +64,7 @@ class SocketHandler implements Runnable{
           line = line.trim();
           System.out.println("Received: " + line);
           String response = getResponse(line, in);
-          if(!response.isEmpty() && response !=null){
+          if(!response.isEmpty()){
             System.out.println("Response : " + response);
             out.write(response+"\r\n");
           }
@@ -94,6 +98,28 @@ class SocketHandler implements Runnable{
 
       // RESP simple string response
       response = "+" + data;
+    }
+
+    if(request.equals("SET")){
+      String lenLine = in.readLine();
+      int keyLength = Integer.parseInt(lenLine.substring(1));
+      String key = in.readLine();
+      int valLength = Integer.parseInt(in.readLine().substring(1));
+      String val = in.readLine();
+
+      System.out.println(key + " : " + val);
+      map.put(key, val);
+      return "+OK";
+    }
+
+    if(request.equals("GET")){
+      System.out.println("Received Get Request");
+      int keyLength = Integer.parseInt(in.readLine().substring(1));
+      String key = in.readLine();
+      System.out.println("KEY : " + key);
+      System.out.println(map.getOrDefault(key, "None"));
+      System.out.println(map.toString());
+      return "+"+map.getOrDefault(key, null);
     }
 
     System.out.println("resp ; " + response);
