@@ -2,6 +2,11 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,7 +48,7 @@ class SocketHandler implements Runnable{
 
   private final ServerSocket serverSocket;
   private  final Socket clientSocket;
-  private static ConcurrentHashMap<String, String> map = new ConcurrentHashMap<>();
+  private static ConcurrentHashMap<String, List<String>> map = new ConcurrentHashMap<>();
 
   public SocketHandler(ServerSocket serverSocket, Socket clientSocket) throws IOException {
     System.out.println("Called new Socket Thread");
@@ -62,9 +67,14 @@ class SocketHandler implements Runnable{
         while ((line = in.readLine()) != null) {
           System.out.println(line);
           line = line.trim();
+
           System.out.println("Received: " + line);
-          String response = getResponse(line, in);
-          if(!response.isEmpty()){
+
+          List<String> lst = parseRedisQuery(line, in);
+          System.out.println(lst);
+
+          String response = getResponse(lst);
+          if(response!=null && !response.isEmpty()){
             System.out.println("Response : " + response);
             out.write(response+"\r\n");
           }
@@ -81,49 +91,69 @@ class SocketHandler implements Runnable{
       }
   }
 
-  public static String getResponse(String request, BufferedReader in) throws IOException {
+  public static String getResponse(List<String> requestList) throws IOException {
 
     String response = "";
 
-    if(request.equals("PING")){
-      response = "+PONG";
+    if(!requestList.isEmpty()){
+
+      if(requestList.get(0).equals("PING")){
+        response = "+PONG";
+      }
+
+      if(requestList.size()>1 && requestList.get(0).equals("ECHO")){
+
+        // RESP simple string response
+        response = "+" + requestList.get(1);
+      }
+
+      if(requestList.size()==3 && requestList.get(0).equals("SET")){
+        map.put(requestList.get(1), Arrays.asList(requestList.get(2)));
+        return "+OK";
+      }
+
+      if(requestList.size()==5 && requestList.get(0).equals("SET") && requestList.get(3).equals("px")){
+        int timeout = Integer.parseInt(requestList.get(4));
+        map.put(requestList.get(1), Arrays.asList(requestList.get(2), LocalTime.now().plus(timeout, ChronoUnit.MILLIS).toString()));
+        return "+OK";
+      }
+
+      if(requestList.size()==2 && requestList.get(0).equals("GET")){
+        System.out.println("Received Get Request");
+        System.out.println(map.toString());
+        List<String> res = map.getOrDefault(requestList.get(1), new ArrayList<>());
+        if(!res.isEmpty()){
+          if(res.size() == 1){
+            return "+"+res.get(0);
+          }else if(LocalTime.now().isBefore(LocalTime.parse(res.get(1)))){
+            return "+"+res.get(0);
+          }else {
+            return "$-1";
+          }
+        }
+        return null;
+      }
     }
 
-    if(request.equals("ECHO")){
-      String lenLine = in.readLine();
-      int length = Integer.parseInt(lenLine.substring(1)); // skip '$'
 
-      // Next line: the actual data
-      String data = in.readLine();
-
-      // RESP simple string response
-      response = "+" + data;
-    }
-
-    if(request.equals("SET")){
-      String lenLine = in.readLine();
-      int keyLength = Integer.parseInt(lenLine.substring(1));
-      String key = in.readLine();
-      int valLength = Integer.parseInt(in.readLine().substring(1));
-      String val = in.readLine();
-
-      System.out.println(key + " : " + val);
-      map.put(key, val);
-      return "+OK";
-    }
-
-    if(request.equals("GET")){
-      System.out.println("Received Get Request");
-      int keyLength = Integer.parseInt(in.readLine().substring(1));
-      String key = in.readLine();
-      System.out.println("KEY : " + key);
-      System.out.println(map.getOrDefault(key, "None"));
-      System.out.println(map.toString());
-      return "+"+map.getOrDefault(key, null);
-    }
 
     System.out.println("resp ; " + response);
     return response;
+  }
+
+  public List<String> parseRedisQuery(String rq, BufferedReader in) throws IOException {
+
+//    rq will be *n where n will be number of strings we have to read
+
+    int n = Integer.parseInt(rq.substring(1));
+    List<String> lst = new ArrayList<>();
+    for(int i=0; i<n; i++){
+      int lineLen = Integer.parseInt(in.readLine().substring(1));
+      lst.add(in.readLine());
+    }
+
+    return lst;
+
   }
 
 }
