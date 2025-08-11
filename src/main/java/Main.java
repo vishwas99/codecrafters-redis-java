@@ -1,7 +1,7 @@
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -21,38 +21,24 @@ public class Main {
           // ensures that we don't run into 'Address already in use' errors
           serverSocket.setReuseAddress(true);
           // Wait for connection from client.
-          clientSocket = serverSocket.accept();
 
           while(true){
-//            byte[] input = new byte[1024];
-//            clientSocket.getInputStream().read(input);
-//            if(inpu)
-            SocketHandler socketHandler = new SocketHandler(serverSocket, clientSocket);
-            pool.execute(socketHandler);
-//            String inputString = new String(input).trim();
-//            System.out.println(inputString);
-//            OutputStream outputStream = clientSocket.getOutputStream();
-//            outputStream.write("+PONG\r\n".getBytes());
+            clientSocket = serverSocket.accept();
+            new Thread(new SocketHandler(serverSocket,clientSocket)).start();
           }
 
-        } catch (IOException e) {
-          System.out.println("IOException: " + e.getMessage());
-        } finally {
-          try {
-            if (clientSocket != null) {
-              clientSocket.close();
-            }
-          } catch (IOException e) {
-            System.out.println("IOException: " + e.getMessage());
-          }
-        }
+        } catch (SocketException e) {
+      throw new RuntimeException(e);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 }
 
 class SocketHandler implements Runnable{
 
-  ServerSocket serverSocket = null;
-  Socket clientSocket = null;
+  private final ServerSocket serverSocket;
+  private  final Socket clientSocket;
 
   public SocketHandler(ServerSocket serverSocket, Socket clientSocket) throws IOException {
     System.out.println("Called new Socket Thread");
@@ -61,18 +47,31 @@ class SocketHandler implements Runnable{
   }
 
   public void run(){
-    while(true) {
-      byte[] input = new byte[1024];
-      try {
-        clientSocket.getInputStream().read(input);
-        String inputString = new String(input).trim();
-        System.out.println(inputString);
-        OutputStream outputStream = clientSocket.getOutputStream();
-        outputStream.write("+PONG\r\n".getBytes());
+      try(
+              BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+              BufferedWriter out = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+      ) {
+        String line;
+        // Keep reading until client disconnects
+        while ((line = in.readLine()) != null) {
+          line = line.trim();
+          System.out.println("Received: " + line);
+
+          // Respond only for "PING"
+          if (line.equalsIgnoreCase("PING")) {
+            out.write("+PONG\r\n");
+            out.flush();
+          }
+        }
       }catch(Exception e){
           e.printStackTrace();
+      }finally {
+        try {
+          clientSocket.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
       }
-    }
   }
 
 }
