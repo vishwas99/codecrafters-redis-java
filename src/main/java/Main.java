@@ -4,6 +4,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class Main {
   public static void main(String[] args) {
@@ -53,15 +54,17 @@ class SocketHandler implements Runnable{
       ) {
         String line;
         // Keep reading until client disconnects
+
         while ((line = in.readLine()) != null) {
+          System.out.println(line);
           line = line.trim();
           System.out.println("Received: " + line);
-
-          // Respond only for "PING"
-          if (line.equalsIgnoreCase("PING")) {
-            out.write("+PONG\r\n");
-            out.flush();
+          String response = getResponse(line, in);
+          if(!response.isEmpty() && response !=null){
+            System.out.println("Response : " + response);
+            out.write(response+"\r\n");
           }
+          out.flush();
         }
       }catch(Exception e){
           e.printStackTrace();
@@ -72,6 +75,29 @@ class SocketHandler implements Runnable{
           throw new RuntimeException(e);
         }
       }
+  }
+
+  public static String getResponse(String request, BufferedReader in) throws IOException {
+
+    String response = "";
+
+    if(request.equals("PING")){
+      response = "+PONG";
+    }
+
+    if(request.equals("ECHO")){
+      String lenLine = in.readLine();
+      int length = Integer.parseInt(lenLine.substring(1)); // skip '$'
+
+      // Next line: the actual data
+      String data = in.readLine();
+
+      // RESP simple string response
+      response = "+" + data;
+    }
+
+    System.out.println("resp ; " + response);
+    return response;
   }
 
 }
