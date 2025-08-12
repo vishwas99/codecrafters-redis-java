@@ -135,8 +135,11 @@ class SocketHandler implements Runnable{
         return null;
       }
 
-      if(requestList.size() == 3 && requestList.get(0).equals("RPUSH")){
-        rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).add(requestList.get(2));
+      if(requestList.size() >= 3 && requestList.get(0).equals("RPUSH")){
+        for(int i=2; i<requestList.size(); i++){
+
+          rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).add(requestList.get(i));
+        }
         return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
       }
 
