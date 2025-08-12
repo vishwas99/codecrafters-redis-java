@@ -143,11 +143,11 @@ class SocketHandler implements Runnable{
         return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
       }
 
+      if(requestList.get(0).equals("LRANGE")){
+        return encodeToQuery(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()), Integer.parseInt(requestList.get(2)), Integer.parseInt(requestList.get(3)));
+      }
 
     }
-
-
-
     System.out.println("resp ; " + response);
     return response;
   }
@@ -166,6 +166,43 @@ class SocketHandler implements Runnable{
     return lst;
 
   }
+
+  public static String encodeToQuery(List<String> list, int start, int end){
+
+    System.out.println(list);
+
+    StringBuilder sb = new StringBuilder();
+
+    sb.append("*");
+    if(start > end || list.size() == 0){
+      sb.append(0);
+      return sb.toString();
+    }
+    int newStart = Math.min(start, list.size()-1);
+    newStart = Math.max(0, start);
+    int newEnd = Math.min(end, list.size()-1);
+    newEnd = Math.max(0, newEnd);
+    sb.append(newEnd-newStart+1);
+    sb.append("\r\n");
+
+
+
+    for (int i=start; i>=0 && i<=end && i<list.size(); i++) {
+      sb.append("$");
+      sb.append(list.get(i).length());
+      sb.append("\r\n");
+      sb.append(list.get(i));
+      if(i<end && i<list.size()-1){
+        sb.append("\r\n");
+      }
+    }
+
+    System.out.println("LRANGE Resp : " + sb.toString());
+
+    return sb.toString();
+
+  }
+
 
 }
 
