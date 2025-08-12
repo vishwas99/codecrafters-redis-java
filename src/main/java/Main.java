@@ -155,6 +155,10 @@ class SocketHandler implements Runnable{
         return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
       }
 
+      if(requestList.size()==2 && requestList.get(0).equals("LLEN")){
+        return ":" + String.valueOf(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()).size());
+      }
+
     }
     System.out.println("resp ; " + response);
     return response;
