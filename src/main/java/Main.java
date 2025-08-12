@@ -147,6 +147,14 @@ class SocketHandler implements Runnable{
         return encodeToQuery(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()), Integer.parseInt(requestList.get(2)), Integer.parseInt(requestList.get(3)));
       }
 
+      if(requestList.size()>=3 && requestList.get(0).equals("LPUSH")){
+        for(int i=2; i<requestList.size(); i++){
+
+          rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).addFirst(requestList.get(i));
+        }
+        return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
+      }
+
     }
     System.out.println("resp ; " + response);
     return response;
