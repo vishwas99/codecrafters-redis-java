@@ -159,14 +159,23 @@ class SocketHandler implements Runnable{
         return ":" + String.valueOf(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()).size());
       }
 
-      if(requestList.size()==2 && requestList.get(0).equals("LPOP")){
+      if(requestList.size()>=2 && requestList.get(0).equals("LPOP")){
         List<String> targetList = rpushMap.getOrDefault(requestList.get(1), new ArrayList<>());
         if(targetList.size() == 0){
           return "$-1";
-        }else{
+        }else if(requestList.size()==2){
           String poppedString = targetList.get(0);
           targetList.remove(0);
           return encodeString(poppedString);
+        }else{
+          int toRemove = Integer.parseInt(requestList.get(2));
+          List<String> responseList = new ArrayList<>();
+          while(toRemove > 0 && targetList.size()>0){
+            responseList.add(targetList.get(0));
+            targetList.remove(0);
+            toRemove--;
+          }
+          return encodeToQuery(responseList, 0, responseList.size()-1);
         }
       }
 
@@ -233,8 +242,6 @@ class SocketHandler implements Runnable{
         sb.append("\r\n");
       }
     }
-
-    System.out.println("LRANGE Resp : " + sb.toString());
 
     return sb.toString();
 
