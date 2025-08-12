@@ -159,6 +159,17 @@ class SocketHandler implements Runnable{
         return ":" + String.valueOf(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()).size());
       }
 
+      if(requestList.size()==2 && requestList.get(0).equals("LPOP")){
+        List<String> targetList = rpushMap.getOrDefault(requestList.get(1), new ArrayList<>());
+        if(targetList.size() == 0){
+          return "$-1";
+        }else{
+          String poppedString = targetList.get(0);
+          targetList.remove(0);
+          return encodeString(poppedString);
+        }
+      }
+
     }
     System.out.println("resp ; " + response);
     return response;
@@ -227,6 +238,10 @@ class SocketHandler implements Runnable{
 
     return sb.toString();
 
+  }
+
+  public static String encodeString(String str){
+    return "$" + String.valueOf(str.length()) + "\r\n" + str;
   }
 
 
