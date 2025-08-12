@@ -49,6 +49,7 @@ class SocketHandler implements Runnable{
   private final ServerSocket serverSocket;
   private  final Socket clientSocket;
   private static ConcurrentHashMap<String, List<String>> map = new ConcurrentHashMap<>();
+  private static ConcurrentHashMap<String, List<String>> rpushMap = new ConcurrentHashMap<>();
 
   public SocketHandler(ServerSocket serverSocket, Socket clientSocket) throws IOException {
     System.out.println("Called new Socket Thread");
@@ -133,6 +134,13 @@ class SocketHandler implements Runnable{
         }
         return null;
       }
+
+      if(requestList.size() == 3 && requestList.get(0).equals("RPUSH")){
+        rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).add(requestList.get(2));
+        return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
+      }
+
+
     }
 
 
