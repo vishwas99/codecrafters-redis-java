@@ -171,6 +171,19 @@ class SocketHandler implements Runnable{
 
     System.out.println(list);
 
+    if(start < 0){
+      start = list.size()+start;
+      if(start<0){
+        start = 0;
+      }
+    }
+
+    if(end < 0){
+      end = list.size()+end;
+    }
+
+    System.out.println(start + " " + end);
+
     StringBuilder sb = new StringBuilder();
 
     sb.append("*");
@@ -186,6 +199,7 @@ class SocketHandler implements Runnable{
     sb.append("\r\n");
 
 
+    System.out.println(newStart + " " + newEnd);
 
     for (int i=start; i>=0 && i<=end && i<list.size(); i++) {
       sb.append("$");
