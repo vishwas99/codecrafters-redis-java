@@ -191,27 +191,27 @@ class SocketHandler implements Runnable{
         BlockingDeque<String> blockingDeque = rpushMap.get(key);
 
         System.out.println("BLPOP Received at " + LocalTime.now());
-        try{
+        try {
           String value;
           if (timeout == 0) {
-            value = blockingDeque.take(); // blocks indefinitely until item appears
-            // proceed with returning value
+            // Block indefinitely until element available
+            value = blockingDeque.take();
           } else {
+            // Block until timeout
             value = blockingDeque.poll(timeout, TimeUnit.SECONDS);
-            // proceed with returning value or nil if null
           }
 
-          if(value != null){
-            System.out.println("BLPOP Triggered, Removed String is : " + value);
-            return encodeToQuery(Arrays.asList(key, value), 0, 1);
-          }else{
-            System.out.println("BLPOP Failed : " + LocalTime.now());
-            return "$-1";
+          if (value != null) {
+            String encodedString = encodeToQuery(Arrays.asList(key, value), 0, 1);
+            System.out.println(encodedString);
+            return encodedString;
+          } else {
+            // Timed out, send nil
+            return "$-1\r\n";
           }
         } catch (InterruptedException e) {
-          System.out.println("Exeception in BLPOP : ");
-          e.printStackTrace();
-          throw new RuntimeException(e);
+          Thread.currentThread().interrupt();
+          return "$-1\r\n"; // Treat interruption as nil
         }
 
       }
@@ -238,7 +238,7 @@ class SocketHandler implements Runnable{
 
   public static String encodeToQuery(List<String> list, int start, int end){
 
-    System.out.println(list);
+    System.out.println("Encode To Query : " + list);
 
     if(start < 0){
       start = list.size()+start;
@@ -250,8 +250,6 @@ class SocketHandler implements Runnable{
     if(end < 0){
       end = list.size()+end;
     }
-
-    System.out.println(start + " " + end);
 
     StringBuilder sb = new StringBuilder();
 
@@ -267,9 +265,6 @@ class SocketHandler implements Runnable{
     sb.append(newEnd-newStart+1);
     sb.append("\r\n");
 
-
-    System.out.println(newStart + " " + newEnd);
-
     for (int i=newStart; i<=newEnd && i<list.size(); i++) {
       sb.append("$");
       sb.append(list.get(i).length());
@@ -280,7 +275,7 @@ class SocketHandler implements Runnable{
       }
     }
 
-    System.out.println(sb.toString());
+    System.out.println("Encoded O/P : " + sb.toString());
 
     return sb.toString();
 
