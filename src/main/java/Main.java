@@ -72,7 +72,7 @@ class SocketHandler implements Runnable{
 
           String response = getResponse(lst);
           if(response!=null && !response.isEmpty()){
-            System.out.println("Response : " + response);
+            System.out.println("Response to Client is  : " + response);
             out.write(response+"\r\n");
           }
           out.flush();
