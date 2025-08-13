@@ -4,12 +4,8 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public class Main {
@@ -49,7 +45,7 @@ class SocketHandler implements Runnable{
   private final ServerSocket serverSocket;
   private  final Socket clientSocket;
   private static ConcurrentHashMap<String, List<String>> map = new ConcurrentHashMap<>();
-  private static ConcurrentHashMap<String, List<String>> rpushMap = new ConcurrentHashMap<>();
+  private static ConcurrentHashMap<String, BlockingDeque<String>> rpushMap = new ConcurrentHashMap<>();
 
   public SocketHandler(ServerSocket serverSocket, Socket clientSocket) throws IOException {
     System.out.println("Called new Socket Thread");
@@ -109,13 +105,18 @@ class SocketHandler implements Runnable{
       }
 
       if(requestList.size()==3 && requestList.get(0).equals("SET")){
-        map.put(requestList.get(1), Arrays.asList(requestList.get(2)));
+        List<String> list = new ArrayList<>();
+        Collections.addAll(list, requestList.get(2));
+        map.put(requestList.get(1), list);
         return "+OK";
       }
 
       if(requestList.size()==5 && requestList.get(0).equals("SET") && requestList.get(3).equals("px")){
         int timeout = Integer.parseInt(requestList.get(4));
-        map.put(requestList.get(1), Arrays.asList(requestList.get(2), LocalTime.now().plus(timeout, ChronoUnit.MILLIS).toString()));
+        List<String> timeoutList = new ArrayList<>();
+        Collections.addAll(timeoutList, requestList.get(2), LocalTime.now().plus(timeout, ChronoUnit.MILLIS).toString());
+
+        map.put(requestList.get(1), timeoutList);
         return "+OK";
       }
 
@@ -138,45 +139,81 @@ class SocketHandler implements Runnable{
       if(requestList.size() >= 3 && requestList.get(0).equals("RPUSH")){
         for(int i=2; i<requestList.size(); i++){
 
-          rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).add(requestList.get(i));
+          rpushMap.computeIfAbsent(requestList.get(1), k->new LinkedBlockingDeque<>()).add(requestList.get(i));
         }
         return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
       }
 
       if(requestList.get(0).equals("LRANGE")){
-        return encodeToQuery(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()), Integer.parseInt(requestList.get(2)), Integer.parseInt(requestList.get(3)));
+        return encodeToQuery(rpushMap.getOrDefault(requestList.get(1), new LinkedBlockingDeque<>()).stream().toList(), Integer.parseInt(requestList.get(2)), Integer.parseInt(requestList.get(3)));
       }
 
       if(requestList.size()>=3 && requestList.get(0).equals("LPUSH")){
         for(int i=2; i<requestList.size(); i++){
 
-          rpushMap.computeIfAbsent(requestList.get(1), k->new ArrayList<>()).addFirst(requestList.get(i));
+          rpushMap.computeIfAbsent(requestList.get(1), k->new LinkedBlockingDeque<>()).addFirst(requestList.get(i));
         }
         return ":"+String.valueOf(rpushMap.get(requestList.get(1)).size());
       }
 
       if(requestList.size()==2 && requestList.get(0).equals("LLEN")){
-        return ":" + String.valueOf(rpushMap.getOrDefault(requestList.get(1), new ArrayList<>()).size());
+        return ":" + String.valueOf(rpushMap.getOrDefault(requestList.get(1), new LinkedBlockingDeque<>()).size());
       }
 
       if(requestList.size()>=2 && requestList.get(0).equals("LPOP")){
-        List<String> targetList = rpushMap.getOrDefault(requestList.get(1), new ArrayList<>());
+        BlockingDeque<String> targetList = rpushMap.getOrDefault(requestList.get(1), new LinkedBlockingDeque<>());
         if(targetList.size() == 0){
           return "$-1";
         }else if(requestList.size()==2){
-          String poppedString = targetList.get(0);
-          targetList.remove(0);
+          String poppedString = targetList.poll();
           return encodeString(poppedString);
         }else{
           int toRemove = Integer.parseInt(requestList.get(2));
           List<String> responseList = new ArrayList<>();
           while(toRemove > 0 && targetList.size()>0){
-            responseList.add(targetList.get(0));
-            targetList.remove(0);
+            responseList.add(targetList.peek());
+            targetList.pop();
             toRemove--;
           }
           return encodeToQuery(responseList, 0, responseList.size()-1);
         }
+      }
+
+      if(requestList.get(0).equals("BLPOP")){
+
+        String key = requestList.get(1);
+        int timeout = 0;
+        if(requestList.size()>2){
+          timeout = Integer.parseInt(requestList.get(2));
+        }
+
+        rpushMap.computeIfAbsent(key, k->new LinkedBlockingDeque<>());
+        BlockingDeque<String> blockingDeque = rpushMap.get(key);
+
+        System.out.println("BLPOP Received at " + LocalTime.now());
+        try{
+          String value;
+          if (timeout == 0) {
+            value = blockingDeque.take(); // blocks indefinitely until item appears
+            // proceed with returning value
+          } else {
+            value = blockingDeque.poll(timeout, TimeUnit.SECONDS);
+            // proceed with returning value or nil if null
+          }
+
+          if(value != null){
+            System.out.println("BLPOP Triggered, Removed String is : " + value);
+            return encodeToQuery(Arrays.asList(key, value), 0, 1);
+          }else{
+            System.out.println("BLPOP Failed : " + LocalTime.now());
+            return "$-1";
+          }
+        } catch (InterruptedException e) {
+          System.out.println("Exeception in BLPOP : ");
+          e.printStackTrace();
+          throw new RuntimeException(e);
+        }
+
       }
 
     }
@@ -233,7 +270,7 @@ class SocketHandler implements Runnable{
 
     System.out.println(newStart + " " + newEnd);
 
-    for (int i=start; i>=0 && i<=end && i<list.size(); i++) {
+    for (int i=newStart; i<=newEnd && i<list.size(); i++) {
       sb.append("$");
       sb.append(list.get(i).length());
       sb.append("\r\n");
@@ -243,6 +280,8 @@ class SocketHandler implements Runnable{
       }
     }
 
+    System.out.println(sb.toString());
+
     return sb.toString();
 
   }
@@ -250,7 +289,5 @@ class SocketHandler implements Runnable{
   public static String encodeString(String str){
     return "$" + String.valueOf(str.length()) + "\r\n" + str;
   }
-
-
 }
 
